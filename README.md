@@ -30,6 +30,7 @@ Table of contents
 - Integration tips
 - Performance notes
 - Benchmarks
+- Ports in other languages
 - FAQ
 - License
 
@@ -180,6 +181,13 @@ siphash(10B)  : 14.00 ns/op (71.4 Mops/s)
 - `siphash(10B)`: SipHash-2-4 on the 10-byte mask message.  
 
 *Notes: build with `-O3 -march=native` for best results.*  
+
+------------------------------------------------------------------
+
+Ports in other languages
+-----------
+
+- **Go:** [n2p5/uuid47](https://github.com/n2p5/uuid47) — port of UUIDv47 in Go
 
 ------------------------------------------------------------------
 FAQ
