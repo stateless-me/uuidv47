@@ -29,6 +29,7 @@ Table of contents
 - Build, test, coverage
 - Integration tips
 - Performance notes
+- Benchmarks
 - FAQ
 - License
 
@@ -133,6 +134,8 @@ make test
 make coverage
 make debug
 sudo make install
+# optional
+make bench && ./bench
 ```
 
 ------------------------------------------------------------------
@@ -151,6 +154,34 @@ SipHash-2-4 on 10-byte message is extremely fast. No allocations.
 
 ------------------------------------------------------------------
 
+Benchmarks
+-----------
+
+**Command:** `./bench` (2,000,000 iters, 1 warmup + 3 rounds)  
+
+**Example run on M1:**
+```bash
+iters=2000000, warmup=1, rounds=3
+[warmup] 34.89 ns/op
+[encode+decode] round 1: 33.80 ns/op, 29.6 Mops/s
+[encode+decode] round 2: 38.16 ns/op, 26.2 Mops/s
+[encode+decode] round 3: 33.33 ns/op, 30.0 Mops/s
+[warmup] 14.83 ns/op
+[siphash(10B)] round 1: 14.88 ns/op, 67.2 Mops/s
+[siphash(10B)] round 2: 15.45 ns/op, 64.7 Mops/s
+[siphash(10B)] round 3: 15.00 ns/op, 66.7 Mops/s
+== best results ==
+encode+decode : 33.00 ns/op (30.3 Mops/s)
+siphash(10B)  : 14.00 ns/op (71.4 Mops/s)
+```
+
+**What it measures**
+- `encode+decode`: full v7 → façade → v7 round-trip.  
+- `siphash(10B)`: SipHash-2-4 on the 10-byte mask message.  
+
+*Notes: build with `-O3 -march=native` for best results.*  
+
+------------------------------------------------------------------
 FAQ
 ---
 Q: Why not xxHash with a secret?

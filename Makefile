@@ -1,4 +1,4 @@
-# Makefile for uuidv47 (header-only) + demo + tests
+# Makefile for uuidv47 (header-only) + demo + bench + tests
 
 CC              ?= cc
 TARGET          ?= uuidv47_demo
@@ -39,6 +39,9 @@ test: $(TEST_SRC) $(HDR)
 	$(CC) $(CFLAGS_COMMON) $(CFLAGS_TEST) $(TEST_SRC) -o tests
 	./tests
 
+bench: bench.c uuidv47.h
+	$(CC) -O3 -march=native -std=c11 -Wall -Wextra bench.c -o bench
+
 coverage: clean
 	$(CC) $(CFLAGS_COMMON) $(CFLAGS_COV) $(TEST_SRC) -o tests_cov $(LDFLAGS_COV)
 	./tests_cov
@@ -65,5 +68,5 @@ format:
 	@command -v clang-format >/dev/null 2>&1 && clang-format -i $(HDR) $(SRC) $(TEST_SRC) || true
 
 clean:
-	rm -f $(TARGET) $(TARGET)-dbg tests tests_cov *.gcno *.gcda *.gcov
+	rm -f $(TARGET) $(TARGET)-dbg tests bench tests_cov *.gcno *.gcda *.gcov
 	rm -rf coverage
