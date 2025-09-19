@@ -1,0 +1,5 @@
+comment = 'uuid47 base type and helpers (v7 storage, v4 facade I/O)'
+default_version = '1.0'
+module_pathname = '$libdir/uuid47'
+relocatable = true
+# schema = pg_catalog

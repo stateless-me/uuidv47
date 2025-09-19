@@ -1,4 +1,4 @@
-# Makefile for uuidv47 (header-only) + demo + bench + tests
+# Makefile for uuidv47 (header-only) + demo + bench + tests + PostgreSQL ext
 
 CC              ?= cc
 TARGET          ?= uuidv47_demo
@@ -21,7 +21,12 @@ LDFLAGS_DEBUG   := -fsanitize=address,undefined
 CFLAGS_COV      := -O0 -g --coverage -fprofile-arcs -ftest-coverage
 LDFLAGS_COV     := --coverage
 
-.PHONY: all release debug run test coverage clean install uninstall format
+.PHONY: all release debug run test bench coverage clean install uninstall format \
+        pgext pginstall pgclean pgtest
+
+# ----------------------------------------
+# C library / demo / tests
+# ----------------------------------------
 
 all: release
 
@@ -49,7 +54,7 @@ coverage: clean
 	@echo "== gcov summary (from tests.c; headers are attributed here) =="
 	@{ command -v gcov >/dev/null 2>&1 && gcov -b -c tests_cov-$(TEST_SRC) | sed -n '1,80p'; } || \
 	  echo "gcov not found or no data; skipping gcov summary."
-	@if command -v lcov >/dev/null 2>&1 && command -v genhtml >/dev/null 2>&1; then \
+	@if command -v lcov >/dev/null 2>&1 && command -v genhtml >/dev/null; then \
 	  echo; echo "== generating lcov report in coverage/ =="; \
 	  rm -rf coverage && mkdir -p coverage; \
 	  lcov --capture --directory . --output-file coverage/coverage.info >/dev/null 2>&1; \
@@ -70,3 +75,25 @@ format:
 clean:
 	rm -f $(TARGET) $(TARGET)-dbg tests bench tests_cov *.gcno *.gcda *.gcov
 	rm -rf coverage
+
+# ----------------------------------------
+# PostgreSQL extension helpers
+# ----------------------------------------
+
+PGEXTDIR   ?= pgext/uuid47
+PG_CONFIG  ?= pg_config
+PSQL       ?= psql
+TEST_SQL   ?= $(PGEXTDIR)/test_uuid47.sql
+DBNAME     ?= postgres
+
+pgext:
+	$(MAKE) -C $(PGEXTDIR) PG_CONFIG=$(PG_CONFIG)
+
+pginstall: pgext
+	$(MAKE) -C $(PGEXTDIR) PG_CONFIG=$(PG_CONFIG) install
+
+pgclean:
+	$(MAKE) -C $(PGEXTDIR) PG_CONFIG=$(PG_CONFIG) clean
+
+pgtest: pginstall
+	$(PSQL) -v ON_ERROR_STOP=1 -d $(DBNAME) -f $(TEST_SQL)
