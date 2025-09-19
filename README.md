@@ -1,24 +1,25 @@
-UUIDv47 - UUIDv7-in / UUIDv4-out (SipHash-masked timestamp)
-==================================================================
+UUIDv47 — UUIDv7-in / UUIDv4-out (SipHash‑masked timestamp)
+===========================================================
 
-uuidv47 lets you store sortable UUIDv7 in your database while emitting a
-UUIDv4-looking façade at your API boundary. It does this by XOR-masking
-only the UUIDv7 timestamp field with a keyed SipHash-2-4 stream tied to
-the UUID’s own random bits.
+`uuidv47` lets you store sortable UUIDv7 in your database while emitting a
+UUIDv4‑looking façade at your API boundary. It XOR‑masks *only* the UUIDv7
+timestamp field with a keyed SipHash‑2‑4 stream derived from the UUID’s own
+random bits. The mapping is deterministic and exactly invertible.
 
-- Header-only C (C89) · zero deps
-- Deterministic, invertible mapping (exact round-trip)
-- RFC-compatible version/variant bits (v7 in DB, v4 on the wire)
-- Key-recovery resistant (SipHash-2-4, 128-bit key)
+- Header‑only C (C89) · zero deps
+- Deterministic, invertible mapping (exact round‑trip)
+- RFC‑compatible version/variant bits (v7 in DB, v4 on the wire)
+- Key‑recovery resistant (SipHash‑2‑4, 128‑bit key)
 - Full tests provided
+- Optional PostgreSQL extension (UUID type + operators/opclasses)
 
 ------------------------------------------------------------------
 
 Table of contents
 -----------------
 - Why
-- Quick start
-- Public API
+- Quick start (C)
+- Public C API
 - Specification
   - UUIDv7 bit layout
   - Façade mapping (v7 ↔ v4)
@@ -27,9 +28,13 @@ Table of contents
   - Collision analysis
 - Security model
 - Build, test, coverage
+- PostgreSQL extension
+  - Build & install
+  - Tests
+  - Gotchas & performance tips
 - Integration tips
 - Performance notes
-- Benchmarks
+- Benchmarks (C)
 - Ports in other languages
 - FAQ
 - License
@@ -38,14 +43,14 @@ Table of contents
 
 Why
 ---
-- DB-friendly: UUIDv7 is time-ordered → better index locality & pagination.
-- Externally neutral: The façade hides timing patterns and looks like v4 to clients/systems.
-- Secret safety: Uses a PRF (SipHash-2-4). Non-crypto hashes are not suitable when the key must not leak.
+- **DB‑friendly**: UUIDv7 is time‑ordered → better index locality & pagination.
+- **Externally neutral**: The façade hides timing patterns and looks like v4 to clients/systems.
+- **Secret safety**: Uses a PRF (SipHash‑2‑4). Non‑crypto hashes are not suitable when the key must not leak.
 
 ------------------------------------------------------------------
 
-Quick start
------------
+Quick start (C)
+---------------
 ```c
 #include <stdio.h>
 #include "uuidv47.h"
@@ -54,14 +59,17 @@ int main(void){
   const char* s = "00000000-0000-7000-8000-000000000000";
   uuid128_t v7;
   if (!uuid_parse(s, &v7)) return 1;
+
   uuidv47_key_t key = { .k0 = 0x0123456789abcdefULL, .k1 = 0xfedcba9876543210ULL };
+
   uuid128_t facade = uuidv47_encode_v4facade(v7, key);
-  uuid128_t back = uuidv47_decode_v4facade(facade, key);
+  uuid128_t back   = uuidv47_decode_v4facade(facade, key);
 
   char a[37], b[37], c[37];
   uuid_format(&v7, a);
   uuid_format(&facade, b);
   uuid_format(&back, c);
+
   printf("v7 (DB) : %s\n", a);
   printf("v4 (API): %s\n", b);
   printf("back    : %s\n", c);
@@ -69,14 +77,17 @@ int main(void){
 ```
 
 Build & run with the provided Makefile:
-  make test
-  make coverage
-  sudo make install
+
+```
+make test
+make coverage
+sudo make install     # installs header into $(PREFIX)/include
+```
 
 ------------------------------------------------------------------
 
-Public API
-----------
+Public C API
+------------
 
 ```c
 typedef struct { uint8_t  b[16]; } uuid128_t;
@@ -84,9 +95,11 @@ typedef struct { uint64_t k0, k1; } uuidv47_key_t;
 
 uuid128_t uuidv47_encode_v4facade(uuid128_t v7, uuidv47_key_t key);
 uuid128_t uuidv47_decode_v4facade(uuid128_t v4_facade, uuidv47_key_t key);
+
 int  uuid_version(const uuid128_t* u);
 void set_version(uuid128_t* u, int ver);
 void set_variant_rfc4122(uuid128_t* u);
+
 bool uuid_parse (const char* str, uuid128_t* out);
 void uuid_format(const uuid128_t* u, char out[37]);
 ```
@@ -95,36 +108,42 @@ void uuid_format(const uuid128_t* u, char out[37]);
 
 Specification
 -------------
-UUIDv7 bit layout:
-- ts_ms_be: 48-bit big-endian timestamp
-- ver:      high nibble of byte 6 = 0x7 (v7) or 0x4 (façade)
-- rand_a:   12 random bits
-- var:      RFC variant (0b10)
-- rand_b:   62 random bits
 
-Façade mapping:
-- Encode: ts48 ^ mask48(R), set version=4
-- Decode: encTS ^ mask48(R), set version=7
-- Random bits unchanged
+### UUIDv7 bit layout
+- **ts_ms_be**: 48‑bit big‑endian timestamp
+- **ver**: high nibble of byte 6 = 0x7 (v7) or 0x4 (façade)
+- **rand_a**: 12 random bits
+- **var**: RFC variant (0b10)
+- **rand_b**: 62 random bits
 
-SipHash input: 10 bytes from random field:
-  msg[0] = (byte6 & 0x0F)
-  msg[1] = byte7
-  msg[2] = (byte8 & 0x3F)
-  msg[3..9] = bytes9..15
+### Façade mapping
+- **Encode**: `ts48 ^ mask48(R)`, then set version = 4
+- **Decode**: `encTS ^ mask48(R)`, then set version = 7
+- Random bits remain unchanged.
 
-Invertibility: XOR mask is reversible with known key.
+### SipHash message
+10 bytes derived from the v7 random field:
+```
+msg[0] = (byte6 & 0x0F)
+msg[1] = byte7
+msg[2] = (byte8 & 0x3F)
+msg[3..9] = bytes9..15
+```
 
-Collision analysis: Injective mapping. Only risk is duplicate randoms per ms.
+### Invertibility
+The mask is XOR with a keyed PRF → perfectly invertible when the key is known.
+
+### Collision analysis
+Mapping is injective; collisions reduce to duplicate randoms within the same ms.
 
 ------------------------------------------------------------------
 
 Security model
 --------------
-- Goal: Secret key unrecoverable even with chosen inputs.
-- Achieved: SipHash-2-4 is a keyed PRF.
-- Keys: 128-bit. Derive via HKDF.
-- Rotation: store small key ID outside UUID.
+- **Goal**: Secret key unrecoverable even with chosen inputs.
+- **Achieved**: SipHash‑2‑4 is a keyed PRF.
+- **Keys**: 128‑bit. Recommend deriving via HKDF.
+- **Rotation**: Store a small key ID alongside UUIDs (out‑of‑band).
 
 ------------------------------------------------------------------
 
@@ -135,32 +154,73 @@ make test
 make coverage
 make debug
 sudo make install
-# optional
+# optional microbench
 make bench && ./bench
 ```
 
 ------------------------------------------------------------------
 
+PostgreSQL extension
+--------------------
+
+This repo includes an optional Postgres extension that defines a `uuid47` base
+type, casts to/from core `uuid`, operators, B‑tree/hash opclasses, and a BRIN
+(minmax‑multi) distance support function.
+
+### Build & install
+```
+# From repo root (uses PGXS via pg_config)
+make pginstall
+```
+
+Enable in a database:
+```sql
+CREATE EXTENSION uuid47;          -- installs type and functions
+-- (If you installed into a custom schema, add it to search_path.)
+```
+
+### Tests
+Run the SQL test suite end‑to‑end:
+```
+make pgtest   PG_CONFIG=/opt/homebrew/opt/postgresql@17/bin/pg_config   PSQL="/opt/homebrew/opt/postgresql@17/bin/psql"   DBNAME=postgres
+```
+
+### Gotchas & performance tips
+- **Use the native column type**: store `uuid47_generate()` into a `uuid47`
+  column. Inserting into `uuid` triggers an assignment cast every row and can be
+  ~2–3 µs/row slower.
+- **Type alignment**: `uuid47` uses `ALIGNMENT = int4` (like core `uuid`) for
+  better tuple formation speed.
+- **Key GUC**: some transforms (e.g., façade output) require a session key:
+  ```sql
+  SET uuid47.key = '0011223344556677:8899aabbccddeeff';
+  ```
+  Parse happens once via a GUC assign hook and is cached per backend.
+
+------------------------------------------------------------------
+
 Integration tips
 ----------------
-- Do encode/decode at API boundary.
-- For Postgres, write tiny C extension.
-- For sharding, hash v4 façade with xxh3 or SipHash.
+- Do encode/decode at the API boundary; keep v7 in storage.
+- For sharding/partitioning, hash the v4 façade (e.g., xxh3 or SipHash).
+- Keep your key material in a KMS; include a small key ID with each row.
 
 ------------------------------------------------------------------
 
-Performance
------------
-SipHash-2-4 on 10-byte message is extremely fast. No allocations.
+Performance notes
+-----------------
+- SipHash‑2‑4 on a 10‑byte message is extremely fast and allocation‑free.
+- The provided implementation avoids per‑row GUC parsing and minimizes copies.
+- Monotonic generator uses per‑backend state; ordering is stable within a session.
 
 ------------------------------------------------------------------
 
-Benchmarks
------------
+Benchmarks (C)
+--------------
 
-**Command:** `./bench` (2,000,000 iters, 1 warmup + 3 rounds)  
+**Command:** `./bench` (2,000,000 iters, 1 warmup + 3 rounds)
 
-**Example run on M1:**
+**Example (Apple M‑series):**
 ```bash
 iters=2000000, warmup=1, rounds=3
 [warmup] 34.89 ns/op
@@ -176,27 +236,27 @@ encode+decode : 33.00 ns/op (30.3 Mops/s)
 siphash(10B)  : 14.00 ns/op (71.4 Mops/s)
 ```
 
-**What it measures**
-- `encode+decode`: full v7 → façade → v7 round-trip.  
-- `siphash(10B)`: SipHash-2-4 on the 10-byte mask message.  
+What it measures
+- `encode+decode`: full v7 → façade → v7 round‑trip.
+- `siphash(10B)`: SipHash‑2‑4 on the 10‑byte mask message.
 
-*Notes: build with `-O3 -march=native` for best results.*  
+> Build with `-O3 -march=native` for best results.
 
 ------------------------------------------------------------------
 
 Ports in other languages
------------
-
-- **Go:** [n2p5/uuid47](https://github.com/n2p5/uuid47) — port of UUIDv47 in Go
+------------------------
+- **Go:** https://github.com/n2p5/uuid47 — port of UUIDv47 in Go
 
 ------------------------------------------------------------------
+
 FAQ
 ---
-Q: Why not xxHash with a secret?
+**Q: Why not xxHash with a secret?**  
 A: Not a PRF; secret can leak. Use SipHash.
 
-Q: Is façade indistinguishable from v4?
-A: Yes, variable bits uniform, version/variant set to v4.
+**Q: Is the façade indistinguishable from v4?**  
+A: Version/variant bits are v4; variable bits are uniformly distributed under the PRF.
 
 ------------------------------------------------------------------
 
