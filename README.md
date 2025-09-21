@@ -248,6 +248,7 @@ Ports in other languages
 ------------------------
 - **Go:** [n2p5/uuid47](https://github.com/n2p5/uuid47) — Go port of UUIDv47
 - **JavaScript:** [sh1kxrv/node_uuidv47](https://github.com/sh1kxrv/node_uuidv47) — JavaScript port of UUIDv47 with native bindings
+- **C#/.NET:** [taiseiue/UUIDv47Sharp](https://github.com/taiseiue/UUIDv47Sharp) - C#/.NET ecosystem port of UUIDv47
 
 ------------------------------------------------------------------
 
