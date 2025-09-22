@@ -36,6 +36,7 @@ Table of contents
 - Performance notes
 - Benchmarks (C)
 - Ports in other languages
+- Production recommendations
 - FAQ
 - License
 
@@ -201,9 +202,21 @@ make pgtest   PG_CONFIG=/opt/homebrew/opt/postgresql@17/bin/pg_config   PSQL="/o
 
 Integration tips
 ----------------
-- Do encode/decode at the API boundary; keep v7 in storage.
-- For sharding/partitioning, hash the v4 façade (e.g., xxh3 or SipHash).
-- Keep your key material in a KMS; include a small key ID with each row.
+
+- Store only the UUIDv7, not the facade ID.
+- Manage the secret through a Key Management Service (KMS).
+
+**Frontend/client-facing entities**
+
+→ Use **UUIDv47** with a B-Tree index. Users aren’t expected to persist this ID and can tolerate cache resets. Secure the secret with an HSM and inject it safely into the process.
+
+**External service–facing entities**
+
+→ If the service is **secure** (e.g., financial), provide **UUID7 (UUIDv47)**.
+
+→ If the service is **not secure**, provide a **secondary ID of type UUIDv4** with a hashmap index.
+  
+If the master key leaks, it’s almost certain your consumer data and systems have leaked as well—which is ultimately a **legal problem**, not a technical one. Data leaks will cause far greater issues than the compromise of an ID master key, which can be rotated safely since only the frontend depends on it.
 
 ------------------------------------------------------------------
 
