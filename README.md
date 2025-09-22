@@ -137,6 +137,9 @@ The mask is XOR with a keyed PRF → perfectly invertible when the key is known.
 ### Collision analysis
 Mapping is injective; collisions reduce to duplicate randoms within the same ms.
 
+### Implications of Duplicate Randoms for Differing Timestamps
+If two IDs have the same randoms, but different timestamps, then XORing the facade IDs will reveal the XOR of the timestamps, because the mask will cancel out. This does not reveal the key, only an upper bound on the duration between when the IDs were generated. For a 1% chance of finding 2 matching randoms, using the birthday problem approximation, ~20 billion IDs would need to be generated, or ~60 billion for a 10% chance. For an attacker trying to reveal information about a chosen target ID, they would need to generate on average 2^74 IDs, which is infeasible.
+
 ------------------------------------------------------------------
 
 Security model
