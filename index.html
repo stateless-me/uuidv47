@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UUIDv47 — UUIDv7-in / UUIDv4-out (SipHash-masked timestamp)</title>
+  <meta name="description" content="uuidv47 stores sortable UUIDv7 in DB while exposing UUIDv4-looking IDs at your API boundary using a keyed SipHash mask on the timestamp. Header-only C (C89), zero deps, optional PostgreSQL extension." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect width='100%25' height='100%25' rx='24' fill='%2318243c'/%3E%3Ctext x='50%25' y='56%25' dominant-baseline='middle' text-anchor='middle' fill='%23a5b4fc' font-family='monospace' font-size='64'%3E47%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind (with typography plugin) -->
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        container: { center: true, padding: '1rem' },
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'], mono: ['JetBrains Mono','ui-monospace','SFMono-Regular'] },
+          colors: {
+            brand: {
+              50:  '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81'
+            }
+          },
+          boxShadow: {
+            'glow': '0 0 0 1px rgba(99,102,241,.25), 0 10px 30px rgba(99,102,241,.15)'
+          }
+        }
+      },
+      darkMode: 'class'
+    }
+  </script>
+
+  <!-- Highlight.js (light/dark theme switching) -->
+  <link id="hljs-theme" rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+  <style>
+    /* Subtle grid+radial background */
+    .bg-mesh {
+      background:
+        radial-gradient(1200px 600px at 80% -20%, rgba(99,102,241,.15), transparent 60%),
+        radial-gradient(1000px 600px at -10% 10%, rgba(147,197,253,.18), transparent 60%),
+        linear-gradient(to bottom, rgba(2,6,23,.03), transparent 35%),
+        repeating-linear-gradient(0deg, rgba(30,41,59,.05), rgba(30,41,59,.05) 1px, transparent 1px, transparent 24px),
+        repeating-linear-gradient(90deg, rgba(30,41,59,.05), rgba(30,41,59,.05) 1px, transparent 1px, transparent 24px);
+    }
+    .prose pre code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .anchor {
+      opacity: 0; transition: opacity .2s ease;
+      margin-left: .25rem; text-decoration: none;
+    }
+    h2:hover .anchor, h3:hover .anchor { opacity: 1; }
+    /* Glassy sticky header */
+    .glass { backdrop-filter: saturate(1.2) blur(10px); }
+  </style>
+
+  <!-- OpenGraph / Twitter -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="UUIDv47 — UUIDv7-in / UUIDv4-out">
+  <meta property="og:description" content="SipHash-masked timestamp: v7 in DB, v4 on the wire. Header-only C, zero deps, optional PostgreSQL extension.">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 antialiased selection:bg-brand-300/40">
+  <!-- Skip link -->
+  <a href="#content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 z-50 bg-brand-600 text-white px-3 py-2 rounded-lg">Skip to content</a>
+
+  <!-- Header -->
+  <header class="fixed top-0 inset-x-0 z-40 glass">
+    <div class="container">
+      <div class="mt-3 mb-3 rounded-2xl border border-slate-200/70 dark:border-slate-800/70 bg-white/70 dark:bg-slate-900/60 shadow-lg">
+        <div class="px-4 md:px-6 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-indigo-700 shadow-glow grid place-items-center text-white font-bold">47</div>
+            <div>
+              <div class="font-extrabold tracking-tight text-lg">UUIDv47</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">UUIDv7-in / UUIDv4-out — SipHash-masked timestamp</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <a href="#quick-start" class="hidden sm:inline-flex items-center px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 hover:border-brand-400 dark:hover:border-brand-500 text-sm hover:shadow">
+              Get started
+            </a>
+            <button id="theme-toggle" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-slate-100 dark:bg-slate-100 dark:text-slate-900 hover:shadow"
+              aria-label="Toggle color theme">
+              <svg id="icon-sun" class="h-4 w-4 hidden dark:inline" viewBox="0 0 24 24" fill="none"><path d="M12 4V2M12 22v-2M4.93 4.93 3.51 3.51M20.49 20.49l-1.42-1.42M4 12H2m20 0h-2M4.93 19.07 3.51 20.49M20.49 3.51l-1.42 1.42" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.5"/></svg>
+              <svg id="icon-moon" class="h-4 w-4 dark:hidden" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke="currentColor" stroke-width="1.5"/></svg>
+              <span class="text-xs font-medium">Theme</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="pt-36 md:pt-40 pb-10 bg-mesh">
+    <div class="container px-4 md:px-6">
+      <div class="max-w-3xl">
+        <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.05]">
+          <span class="bg-clip-text text-transparent bg-gradient-to-r from-brand-500 via-indigo-500 to-sky-500">
+            UUIDv47
+          </span>
+          <span class="block mt-2 text-slate-700 dark:text-slate-300">v7 in your DB, v4 on the wire</span>
+        </h1>
+        <p class="mt-5 text-lg md:text-xl text-slate-600 dark:text-slate-400">
+          XOR-mask only the UUIDv7 timestamp using a keyed SipHash-2-4 stream derived from the UUID’s random bits.
+          Deterministic, invertible, RFC-compatible.
+        </p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a href="#quick-start" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white shadow-glow">
+            Quick start
+          </a>
+          <a href="#spec" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300/70 dark:border-slate-700 hover:border-brand-400 dark:hover:border-brand-500">
+            Read the spec
+          </a>
+        </div>
+        <div class="mt-6 flex flex-wrap gap-2 text-xs">
+          <span class="px-2.5 py-1 rounded-full bg-white/70 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800/70">Header-only C (C89)</span>
+          <span class="px-2.5 py-1 rounded-full bg-white/70 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800/70">Zero deps</span>
+          <span class="px-2.5 py-1 rounded-full bg-white/70 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800/70">SipHash-2-4 · 128-bit key</span>
+          <span class="px-2.5 py-1 rounded-full bg-white/70 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800/70">PostgreSQL extension</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main layout -->
+  <main id="content" class="container px-4 md:px-6 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+    <!-- Article -->
+    <article class="prose prose-slate dark:prose-invert max-w-none prose-pre:rounded-xl prose-pre:shadow-lg prose-pre:bg-slate-900/95 dark:prose-pre:bg-slate-900 prose-code:text-[.95em] prose-code:before:hidden prose-code:after:hidden">
+      <!-- Intro bullets -->
+      <section>
+        <ul class="not-prose grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+          <li class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">Deterministic, invertible mapping (exact round-trip)</li>
+          <li class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">RFC-compatible version/variant bits (v7 in DB, v4 on the wire)</li>
+          <li class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60">Key-recovery resistant (SipHash-2-4)</li>
+        </ul>
+      </section>
+
+      <!-- Why -->
+      <section id="why" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Why <a class="anchor text-brand-500" href="#why" aria-label="Link to section">#</a>
+        </h2>
+        <ul>
+          <li><strong>DB-friendly:</strong> UUIDv7 is time-ordered → better index locality & pagination.</li>
+          <li><strong>Externally neutral:</strong> façade hides timing patterns and looks like v4 to clients.</li>
+          <li><strong>Secret safety:</strong> uses a PRF (SipHash-2-4); avoids non-crypto hashes.</li>
+        </ul>
+      </section>
+
+      <!-- Quick start -->
+      <section id="quick-start" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Quick start (C) <a class="anchor text-brand-500" href="#quick-start" aria-label="Link to section">#</a>
+        </h2>
+        <pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-c">
+#include &lt;stdio.h&gt;
+#include "uuidv47.h"
+
+int main(void){
+  const char* s = "00000000-0000-7000-8000-000000000000";
+  uuid128_t v7;
+  if (!uuid_parse(s, &v7)) return 1;
+
+  uuidv47_key_t key = { .k0 = 0x0123456789abcdefULL, .k1 = 0xfedcba9876543210ULL };
+
+  uuid128_t facade = uuidv47_encode_v4facade(v7, key);
+  uuid128_t back   = uuidv47_decode_v4facade(facade, key);
+
+  char a[37], b[37], c[37];
+  uuid_format(&v7, a);
+  uuid_format(&facade, b);
+  uuid_format(&back, c);
+
+  printf("v7 (DB) : %s\n", a);
+  printf("v4 (API): %s\n", b);
+  printf("back    : %s\n", c);
+}
+        </code></pre>
+
+        <pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-bash">
+make test
+make coverage
+sudo make install     # installs header into $(PREFIX)/include
+        </code></pre>
+      </section>
+
+      <!-- Public C API -->
+      <section id="api" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Public C API <a class="anchor text-brand-500" href="#api" aria-label="Link to section">#</a>
+        </h2>
+<pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-c">
+typedef struct { uint8_t  b[16]; } uuid128_t;
+typedef struct { uint64_t k0, k1; } uuidv47_key_t;
+
+uuid128_t uuidv47_encode_v4facade(uuid128_t v7, uuidv47_key_t key);
+uuid128_t uuidv47_decode_v4facade(uuid128_t v4_facade, uuidv47_key_t key);
+
+int  uuid_version(const uuid128_t* u);
+void set_version(uuid128_t* u, int ver);
+void set_variant_rfc4122(uuid128_t* u);
+
+bool uuid_parse (const char* str, uuid128_t* out);
+void uuid_format(const uuid128_t* u, char out[37]);
+</code></pre>
+      </section>
+
+      <!-- Spec -->
+      <section id="spec" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Specification <a class="anchor text-brand-500" href="#spec" aria-label="Link to section">#</a>
+        </h2>
+        <h3 id="bit-layout" class="group inline-flex items-baseline gap-1">
+          UUIDv7 bit layout <a class="anchor text-brand-500" href="#bit-layout" aria-label="Link to section">#</a>
+        </h3>
+        <ul>
+          <li><strong>ts_ms_be</strong>: 48-bit big-endian timestamp</li>
+          <li><strong>ver</strong>: high nibble of byte 6 = 0x7 (v7) or 0x4 (façade)</li>
+          <li><strong>rand_a</strong>: 12 random bits</li>
+          <li><strong>var</strong>: RFC variant (0b10)</li>
+          <li><strong>rand_b</strong>: 62 random bits</li>
+        </ul>
+
+        <h3 id="facade" class="group inline-flex items-baseline gap-1">
+          Façade mapping (v7 ↔ v4) <a class="anchor text-brand-500" href="#facade" aria-label="Link to section">#</a>
+        </h3>
+        <ul>
+          <li><strong>Encode</strong>: <code>ts48 ^ mask48(R)</code>, then set version = 4</li>
+          <li><strong>Decode</strong>: <code>encTS ^ mask48(R)</code>, then set version = 7</li>
+          <li>Random bits remain unchanged.</li>
+        </ul>
+
+        <h3 id="siphash" class="group inline-flex items-baseline gap-1">
+          SipHash message derived from random <a class="anchor text-brand-500" href="#siphash" aria-label="Link to section">#</a>
+        </h3>
+<pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-text">
+msg[0] = (byte6 &amp; 0x0F)
+msg[1] = byte7
+msg[2] = (byte8 &amp; 0x3F)
+msg[3..9] = bytes9..15
+</code></pre>
+
+        <h3 id="invertibility" class="group inline-flex items-baseline gap-1">
+          Invertibility <a class="anchor text-brand-500" href="#invertibility" aria-label="Link to section">#</a>
+        </h3>
+        <p>The mask is XOR with a keyed PRF → perfectly invertible when the key is known.</p>
+
+        <h3 id="collisions" class="group inline-flex items-baseline gap-1">
+          Collision analysis <a class="anchor text-brand-500" href="#collisions" aria-label="Link to section">#</a>
+        </h3>
+        <p>Mapping is injective; collisions reduce to duplicate randoms within the same ms.</p>
+
+        <h3 id="dup-randoms" class="group inline-flex items-baseline gap-1">
+          Implications of Duplicate Randoms for Differing Timestamps <a class="anchor text-brand-500" href="#dup-randoms" aria-label="Link to section">#</a>
+        </h3>
+        <p>If two IDs share randoms but differ in timestamps, XORing façade IDs reveals the XOR of timestamps while the mask cancels. This does not reveal the key, only an upper bound on the gap. ~20B IDs for ~1% chance of a match (birthday approximation), ~60B for ~10%; chosen-target attack ≈ 2^74 IDs.</p>
+      </section>
+
+      <!-- Security -->
+      <section id="security" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Security model <a class="anchor text-brand-500" href="#security" aria-label="Link to section">#</a>
+        </h2>
+        <ul>
+          <li><strong>Goal:</strong> Secret key unrecoverable even with chosen inputs.</li>
+          <li><strong>Achieved:</strong> SipHash-2-4 is a keyed PRF.</li>
+          <li><strong>Keys:</strong> 128-bit. Derive via HKDF.</li>
+          <li><strong>Rotation:</strong> Store a small key ID alongside UUIDs.</li>
+        </ul>
+      </section>
+
+      <!-- Build / Test -->
+      <section id="build" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Build, test, coverage <a class="anchor text-brand-500" href="#build" aria-label="Link to section">#</a>
+        </h2>
+<pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-bash">
+make test
+make coverage
+make debug
+sudo make install
+# optional microbench
+make bench &amp;&amp; ./bench
+</code></pre>
+      </section>
+
+      <!-- PostgreSQL -->
+      <section id="postgres" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          PostgreSQL extension <a class="anchor text-brand-500" href="#postgres" aria-label="Link to section">#</a>
+        </h2>
+        <p>Defines a <code>uuid47</code> base type, casts to/from core <code>uuid</code>, operators, B-tree/hash opclasses, and a BRIN (minmax-multi) distance support function.</p>
+        <h3 id="pg-build" class="group inline-flex items-baseline gap-1">
+          Build &amp; install <a class="anchor text-brand-500" href="#pg-build" aria-label="Link to section">#</a>
+        </h3>
+<pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-bash">
+# From repo root (uses PGXS via pg_config)
+make pginstall
+</code></pre>
+
+        <p>Enable in a database:</p>
+<pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-sql">
+CREATE EXTENSION uuid47;          -- installs type and functions
+-- (If installed into a custom schema, add it to search_path.)
+</code></pre>
+
+        <h3 id="pg-tests" class="group inline-flex items-baseline gap-1">
+          Tests <a class="anchor text-brand-500" href="#pg-tests" aria-label="Link to section">#</a>
+        </h3>
+<pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-bash">
+make pgtest   PG_CONFIG=/opt/homebrew/opt/postgresql@17/bin/pg_config   PSQL="/opt/homebrew/opt/postgresql@17/bin/psql"   DBNAME=postgres
+</code></pre>
+
+        <h3 id="pg-gotchas" class="group inline-flex items-baseline gap-1">
+          Gotchas &amp; performance tips <a class="anchor text-brand-500" href="#pg-gotchas" aria-label="Link to section">#</a>
+        </h3>
+        <ul>
+          <li><strong>Use the native column type</strong>: store <code>uuid47_generate()</code> into a <code>uuid47</code> column to avoid per-row assignment casts (~2–3 µs/row).</li>
+          <li><strong>Type alignment</strong>: <code>uuid47</code> uses <code>ALIGNMENT = int4</code> (like core <code>uuid</code>).</li>
+          <li><strong>Key GUC</strong>: set a session key when required:
+<pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-sql">
+SET uuid47.key = '0011223344556677:8899aabbccddeeff';
+</code></pre>
+          </li>
+        </ul>
+      </section>
+
+      <!-- Integration -->
+      <section id="integration" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Integration tips <a class="anchor text-brand-500" href="#integration" aria-label="Link to section">#</a>
+        </h2>
+        <ul>
+          <li>Store only the UUIDv7, not the façade ID. Manage the secret through a KMS.</li>
+        </ul>
+        <p><strong>Frontend/client-facing entities</strong> → Use <strong>UUIDv47</strong> with a B-Tree index; secure secret with an HSM.</p>
+        <p><strong>External service–facing entities</strong> → Provide <strong>UUID7 (UUIDv47)</strong> when secure; otherwise provide a secondary <strong>UUIDv4</strong>.</p>
+        <p>If the master key leaks, rotate; impact is limited to frontend.</p>
+      </section>
+
+      <!-- Performance -->
+      <section id="perf" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Performance notes <a class="anchor text-brand-500" href="#perf" aria-label="Link to section">#</a>
+        </h2>
+        <ul>
+          <li>SipHash-2-4 on a 10-byte message is extremely fast and allocation-free.</li>
+          <li>Implementation avoids per-row GUC parsing and minimizes copies.</li>
+          <li>Monotonic generator uses per-backend state; ordering is stable within a session.</li>
+        </ul>
+      </section>
+
+      <!-- Benchmarks -->
+      <section id="benchmarks" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Benchmarks (C) <a class="anchor text-brand-500" href="#benchmarks" aria-label="Link to section">#</a>
+        </h2>
+<pre class="relative"><button class="copy absolute right-3 top-3 text-xs px-2 py-1 rounded-md bg-slate-800 text-white hover:bg-slate-700">Copy</button><code class="language-bash">
+iters=2000000, warmup=1, rounds=3
+[warmup] 34.89 ns/op
+[encode+decode] round 1: 33.80 ns/op, 29.6 Mops/s
+[encode+decode] round 2: 38.16 ns/op, 26.2 Mops/s
+[encode+decode] round 3: 33.33 ns/op, 30.0 Mops/s
+[warmup] 14.83 ns/op
+[siphash(10B)] round 1: 14.88 ns/op, 67.2 Mops/s
+[siphash(10B)] round 2: 15.45 ns/op, 64.7 Mops/s
+[siphash(10B)] round 3: 15.00 ns/op, 66.7 Mops/s
+== best results ==
+encode+decode : 33.00 ns/op (30.3 Mops/s)
+siphash(10B)  : 14.00 ns/op (71.4 Mops/s)
+</code></pre>
+        <p><em>Build with</em> <code>-O3 -march=native</code> for best results.</p>
+      </section>
+
+      <!-- Ports -->
+      <section id="ports" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          Ports in other languages <a class="anchor text-brand-500" href="#ports" aria-label="Link to section">#</a>
+        </h2>
+        <ul>
+          <li><a class="underline decoration-dotted underline-offset-4" href="https://github.com/n2p5/uuid47">Go: n2p5/uuid47</a></li>
+          <li><a class="underline decoration-dotted underline-offset-4" href="https://github.com/sh1kxrv/node_uuidv47">JavaScript: sh1kxrv/node_uuidv47</a></li>
+          <li><a class="underline decoration-dotted underline-offset-4" href="https://github.com/taiseiue/UUIDv47Sharp">C#/.NET: taiseiue/UUIDv47Sharp</a></li>
+          <li><a class="underline decoration-dotted underline-offset-4" href="https://github.com/sylph01/uuid47">Ruby: sylph01/uuid47</a></li>
+        </ul>
+      </section>
+
+      <!-- FAQ -->
+      <section id="faq" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          FAQ <a class="anchor text-brand-500" href="#faq" aria-label="Link to section">#</a>
+        </h2>
+        <p><strong>Q:</strong> Why not xxHash with a secret?<br>
+        <strong>A:</strong> Not a PRF; secret can leak. Use SipHash.</p>
+        <p><strong>Q:</strong> Is the façade indistinguishable from v4?<br>
+        <strong>A:</strong> Version/variant bits are v4; variable bits are uniformly distributed under the PRF.</p>
+      </section>
+
+      <!-- License -->
+      <section id="license" class="mt-12">
+        <h2 class="group inline-flex items-baseline gap-1">
+          License <a class="anchor text-brand-500" href="#license" aria-label="Link to section">#</a>
+        </h2>
+        <p>MIT, Copyright (c) 2025 Stateless Limited</p>
+      </section>
+    </article>
+
+    <!-- TOC -->
+    <aside class="hidden lg:block">
+      <nav id="toc" class="sticky top-40 space-y-2 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60">
+        <div class="text-sm font-semibold mb-2 text-slate-600 dark:text-slate-300">Contents</div>
+        <ol class="text-sm space-y-1">
+          <li><a data-spy href="#why" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Why</a></li>
+          <li><a data-spy href="#quick-start" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Quick start (C)</a></li>
+          <li><a data-spy href="#api" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Public C API</a></li>
+          <li><a data-spy href="#spec" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Specification</a></li>
+          <li><a data-spy href="#security" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Security model</a></li>
+          <li><a data-spy href="#build" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Build, test, coverage</a></li>
+          <li><a data-spy href="#postgres" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">PostgreSQL extension</a></li>
+          <li><a data-spy href="#integration" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Integration tips</a></li>
+          <li><a data-spy href="#perf" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Performance notes</a></li>
+          <li><a data-spy href="#benchmarks" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Benchmarks</a></li>
+          <li><a data-spy href="#ports" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">Ports</a></li>
+          <li><a data-spy href="#faq" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">FAQ</a></li>
+          <li><a data-spy href="#license" class="block px-2 py-1 rounded hover:bg-brand-100/60 dark:hover:bg-slate-800">License</a></li>
+        </ol>
+      </nav>
+    </aside>
+  </main>
+
+  <!-- Footer -->
+  <footer class="mt-16">
+    <div class="container px-4 md:px-6 py-10 border-t border-slate-200 dark:border-slate-800 text-sm text-slate-500 dark:text-slate-400">
+      © 2025 Stateless Limited · MIT License
+    </div>
+  </footer>
+
+  <!-- Back to top FAB -->
+  <button id="to-top" aria-label="Back to top"
+          class="hidden fixed bottom-6 right-6 z-40 rounded-full p-3 bg-brand-600 text-white shadow-glow hover:bg-brand-500">
+    ↑
+  </button>
+
+  <script>
+    // Theme: respect persisted or system preference
+    (function initTheme(){
+      const q = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem('theme');
+      const dark = saved ? saved === 'dark' : q.matches;
+      document.documentElement.classList.toggle('dark', dark);
+      setHljsTheme(dark);
+    })();
+
+    document.getElementById('theme-toggle').addEventListener('click', () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      setHljsTheme(isDark);
+    });
+
+    function setHljsTheme(isDark){
+      const link = document.getElementById('hljs-theme');
+      link.href = isDark
+        ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css'
+        : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
+    }
+
+    // Highlight.js
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.hljs) hljs.highlightAll();
+      enhanceCodeBlocks();
+      setupScrollSpy();
+    });
+
+    // Copy buttons on <pre><code>
+    function enhanceCodeBlocks() {
+      document.querySelectorAll('pre').forEach(pre => {
+        const btn = pre.querySelector('button.copy');
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+          const code = pre.querySelector('code')?.innerText ?? '';
+          try {
+            await navigator.clipboard.writeText(code);
+            const old = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.classList.add('bg-emerald-600');
+            setTimeout(() => { btn.textContent = old; btn.classList.remove('bg-emerald-600'); }, 1200);
+          } catch(e) {
+            btn.textContent = 'Press ⌘/Ctrl+C';
+          }
+        });
+      });
+    }
+
+    // Scroll spy for TOC
+    function setupScrollSpy() {
+      const links = [...document.querySelectorAll('[data-spy]')];
+      const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+
+      const activate = (id) => {
+        links.forEach(a => {
+          const active = a.getAttribute('href') === `#${id}`;
+          a.classList.toggle('bg-brand-100/60', active);
+          a.classList.toggle('dark:bg-slate-800', active);
+          a.classList.toggle('text-brand-700', active);
+        });
+      };
+
+      const io = new IntersectionObserver(entries => {
+        entries.forEach(entry => { if (entry.isIntersecting) activate(entry.target.id); });
+      }, { rootMargin: '0px 0px -60% 0px', threshold: 0.1 });
+
+      sections.forEach(sec => io.observe(sec));
+    }
+
+    // Back-to-top visibility + behavior
+    const toTop = document.getElementById('to-top');
+    window.addEventListener('scroll', () => {
+      toTop.classList.toggle('hidden', window.scrollY < 400);
+    });
+    toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  </script>
+</body>
+</html>
