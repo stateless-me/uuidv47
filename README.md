@@ -267,6 +267,7 @@ Ports in other languages
 - **C#/.NET:** [taiseiue/UUIDv47Sharp](https://github.com/taiseiue/UUIDv47Sharp) - C#/.NET ecosystem port of UUIDv47
 - **Ruby:** [sylph01/uuid47](https://github.com/sylph01/uuid47) - Ruby port of UUIDv47
 - **PHP:** [takaram/uuid47](https://github.com/takaram/uuid47) - PHP port of UUIDv47
+- **Python:** [takaram/uuid47](https://github.com/FatahChan/python-uuidv47) - Python port of UUIDv47
 
 ------------------------------------------------------------------
 
