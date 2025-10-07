@@ -268,6 +268,7 @@ Ports in other languages
 - **Ruby:** [sylph01/uuid47](https://github.com/sylph01/uuid47) - Ruby port of UUIDv47
 - **PHP:** [takaram/uuid47](https://github.com/takaram/uuid47) - PHP port of UUIDv47
 - **Python:** [FatahChan/python-uuidv47](https://github.com/FatahChan/python-uuidv47) - Python port of UUIDv47
+- **Rust:** [potistudio/uuid47-rs](https://github.com/potistudio/uuid47-rs) - Rust port of UUIDv47
 
 ------------------------------------------------------------------
 
